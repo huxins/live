@@ -22,6 +22,8 @@ import java.util.regex.Pattern;
 public class DouyuExtractor {
 
     public Map extract (String room) throws IOException, ScriptException, NoSuchMethodException {
+        String result = "";
+
         ScriptEngine engine = new ScriptEngineManager().getEngineByName("nashorn");
 //        engine.eval("print('Hello World!');");
 //        engine.eval(new FileReader("src/main/java/cn/inxiny/live/core/expand/hello.js"));
@@ -40,7 +42,8 @@ public class DouyuExtractor {
             Invocable invocable = (Invocable) engine;
             Object sign = invocable.invokeFunction("getSign", room,"d063f90e47753de1b979189300081501",new Date().getTime()/1000);
             System.out.println(sign);
-//            String result = HttpUtils.sendPost("https://www.douyu.com/lapi/live/getH5Play/"+room, sign.toString());
+            result = HttpUtils.sendPost("https://www.douyu.com/lapi/live/getH5Play/"+room, sign.toString());
+            System.out.println(result);
             Connection con = Jsoup.connect("https://www.douyu.com/lapi/live/getH5Play/"+room);
             String[] split = sign.toString().split("&");
             for (String str: split) {
@@ -60,6 +63,8 @@ public class DouyuExtractor {
 
         Map map = new HashMap();
         map.put("state","Hello");
+        Map<String, Object> stringObjectMap = JsonUtils.readJson2Map(result, Map.class, String.class, Object.class);
+        map.put("result",stringObjectMap);
         return map;
     }
 }
