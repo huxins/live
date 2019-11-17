@@ -1,4 +1,4 @@
-package cn.inxiny.live.Util;
+package cn.inxiny.live.utils;
 
 import org.springframework.beans.factory.annotation.Value;
 

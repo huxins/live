@@ -1,6 +1,5 @@
 package cn.inxiny.live.gain;
 
-import cn.inxiny.live.Util.DBUtil;
 import com.gargoylesoftware.htmlunit.BrowserVersion;
 import com.gargoylesoftware.htmlunit.NicelyResynchronizingAjaxController;
 import com.gargoylesoftware.htmlunit.WebClient;
@@ -16,9 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 public class GainController {
@@ -110,36 +107,6 @@ public class GainController {
             e.printStackTrace();
         }
 
-    }
-
-    // Json爬取虎牙
-    @GetMapping(value = "/huyaJson")
-    public String gainHuYaJson ( ) {
-        String url="https://www.huya.com/";
-        Connection connect = Jsoup.connect(url).timeout(20000);
-        Map header = new HashMap();
-        header.put("m", "LiveList");
-        header.put("do", "getLiveListByPage");
-        header.put("tagAll", "0");
-        header.put("page", "1");
-        int page = 0;//页数
-        connect.data(header);
-        Document doc= null;
-        try {
-            //获取页面数操作 首先要用jsoup解析当前页面，看看有多少页，
-            Document exam = Jsoup.connect("https://www.huya.com/l").get();//请求链接所有直播
-            Elements links = exam.getElementsByClass("list-page");//可以遍历到人数和主播昵称
-            page = Integer.parseInt(links.attr("data-pages"));
-            System.out.println(page);
-
-            doc = connect.get();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        String text = doc.text();
-
-        return text;
     }
 
     // Jsoup爬取斗鱼
