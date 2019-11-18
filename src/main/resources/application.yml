@@ -5,3 +5,16 @@ db:
   url: jdbc:postgresql://192.168.11.25:5432/live
   user: postgres
   password: 123456
+spring:
+  redis:
+    host: 127.0.0.1
+    port: 6379
+    password:
+    database: 1
+    timeout: 1000
+    jedis:
+      pool:
+        max-active: 8
+        max-wait: -1
+        max-idle: 8
+        min-idle: 0

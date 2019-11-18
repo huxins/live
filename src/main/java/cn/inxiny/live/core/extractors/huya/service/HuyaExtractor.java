@@ -1,5 +1,6 @@
-package cn.inxiny.live.core.extractors;
+package cn.inxiny.live.core.extractors.huya.service;
 
+import cn.inxiny.live.core.Extractor;
 import cn.inxiny.live.utils.JsonUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Connection;
@@ -7,9 +8,9 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -17,8 +18,8 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-@Component
-public class HuyaExtractor {
+@Service("huyaExtractor")
+public class HuyaExtractor implements Extractor {
 
     public Map extract (String room) throws IOException {
         Map map = new HashMap();
