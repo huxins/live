@@ -3,6 +3,7 @@ package cn.inxiny.live;
 import cn.inxiny.live.core.Extractor;
 import cn.inxiny.live.core.Platform;
 import cn.inxiny.live.core.extractors.douyu.service.DouyuExtractor;
+import cn.inxiny.live.utils.ResultBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.*;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import javax.annotation.Resource;
 import javax.script.ScriptException;
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -28,20 +30,23 @@ public class LiveBox {
     }
 
     @RequestMapping(value = "/douyuLive/{room}",method = RequestMethod.GET)
-    public String send (@PathVariable("room") String room) throws IOException {
+    public String send (@PathVariable("room") String room) throws IOException, ScriptException, NoSuchMethodException {
         DouyuExtractor douyuExtractor = new DouyuExtractor();
-        return douyuExtractor.hlsH5Preview(room);
+        return douyuExtractor.getStreamOnH5(room);
     }
 
     @RequestMapping(value = "/live/{item}/{room}",method = RequestMethod.GET)
-    public Map extractLive (@PathVariable("item") String item, @PathVariable("room") String room) throws IOException, ScriptException, NoSuchMethodException {
+    public ResultBean extractLive (@PathVariable("item") String item, @PathVariable("room") String room) throws IOException, ScriptException, NoSuchMethodException {
+        List extract = null;
         Platform platform = Platform.valueOf(item.toUpperCase());
         if (platform != null) {
             switch (platform) {
                 case HUYA:
-                    return huyaExtractor.extract(room);
+                    extract = huyaExtractor.extract(room);
+                    return ResultBean.success(extract);
                 case DOUYU:
-                    return douyuExtractor.extract(room);
+                    extract = douyuExtractor.extract(room);
+                    return ResultBean.success(extract);
             }
         }
 

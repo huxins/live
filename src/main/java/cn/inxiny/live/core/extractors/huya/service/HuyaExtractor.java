@@ -1,11 +1,13 @@
 package cn.inxiny.live.core.extractors.huya.service;
 
 import cn.inxiny.live.core.Extractor;
+import cn.inxiny.live.core.exception.NullRoomNumberException;
 import cn.inxiny.live.utils.JsonUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
@@ -21,11 +23,15 @@ import java.util.regex.Pattern;
 @Service("huyaExtractor")
 public class HuyaExtractor implements Extractor {
 
-    public Map extract (String room) throws IOException {
+    public List extract (String room) throws IOException {
         Map map = new HashMap();
-
         Document exam = Jsoup.connect("https://www.huya.com/" + room).get();
-        String title = exam.getElementById("J_roomTitle").text();
+
+        Element j_roomTitle = exam.getElementById("J_roomTitle");
+//        if (j_roomTitle == null) {
+//            throw new NullRoomNumberException();
+//        }
+        String title = j_roomTitle.text();
         String state = "";
 
         String html = exam.html();
@@ -61,7 +67,10 @@ public class HuyaExtractor implements Extractor {
         map.put("title",title);
         map.put("state",state);
 
-        return map;
+        List list = new ArrayList();
+        list.add(map);
+
+        return list;
     }
 
     /**
