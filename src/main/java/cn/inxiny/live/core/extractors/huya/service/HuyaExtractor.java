@@ -1,8 +1,11 @@
 package cn.inxiny.live.core.extractors.huya.service;
 
+import cn.hutool.core.date.DateTime;
+import cn.hutool.core.date.DateUtil;
 import cn.inxiny.live.core.extractors.Extractor;
 import cn.inxiny.live.core.exception.NullRoomNumberException;
 import cn.inxiny.live.core.extractors.Live;
+import cn.inxiny.live.core.extractors.Platform;
 import cn.inxiny.live.utils.JsonUtils;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
@@ -12,10 +15,7 @@ import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -23,7 +23,7 @@ import java.util.regex.Pattern;
 public class HuyaExtractor implements Extractor {
 
     public Live extract (String room) throws IOException {
-        Live live = new Live();
+        Live live = new Live(Platform.HUYA);
         String html = Jsoup.connect("https://www.huya.com/" + room).get().html();
         if (!html.contains("roomTitle")) {
             throw new NullRoomNumberException();
@@ -59,7 +59,7 @@ public class HuyaExtractor implements Extractor {
      * @param html
      */
     public Live getStream (String html) throws IOException {
-        Live live = new Live();
+        Live live = new Live(Platform.HUYA);
         Matcher streamMatcher = Pattern.compile("\"stream\":(.*)(\\s\\W)").matcher(html);
         String result = "";
         if (streamMatcher.find()) {
@@ -90,9 +90,11 @@ public class HuyaExtractor implements Extractor {
         live.setRoomName(info.get("introduction").toString());
         live.setRoomImg(info.get("screenshot").toString());
         live.setOnline(true);
+        live.setLastTime(new Date(Long.parseLong(info.get("startTime").toString() + "000")));
 
         live.setOwnerName(info.get("nick").toString());
         live.setOwnerAvatar(info.get("avatar180").toString());
+        live.setPrivateHost(info.get("privateHost").toString());
 
         Matcher roomInfoMatcher = Pattern.compile(">公告.*>(.*)(</s)").matcher(html);
         if (roomInfoMatcher.find()) {

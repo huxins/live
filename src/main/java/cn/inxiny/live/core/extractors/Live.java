@@ -1,5 +1,7 @@
 package cn.inxiny.live.core.extractors;
 
+import cn.inxiny.live.utils.JsonUtils;
+
 import java.util.Date;
 
 /**
@@ -17,6 +19,7 @@ public class Live {
 
     private String ownerName;       // 昵称
     private String ownerAvatar;     // 头像
+    private String privateHost;     // 私有房号
 
     private String link;            // 默认
 
@@ -105,7 +108,16 @@ public class Live {
         return lastTime;
     }
 
+    public String getPrivateHost() {
+        return privateHost;
+    }
+
+    public void setPrivateHost(String privateHost) {
+        this.privateHost = privateHost;
+    }
+
     public void setLastTime(Date lastTime) {
         this.lastTime = lastTime;
     }
+
 }

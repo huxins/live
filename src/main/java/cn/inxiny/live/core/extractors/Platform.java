@@ -4,5 +4,5 @@ public enum Platform {
     DOUYU,
     HUYA,
     PANDA,
-    ZHANQI
+    ZHANQI;
 }

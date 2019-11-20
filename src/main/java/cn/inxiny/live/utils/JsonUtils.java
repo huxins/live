@@ -49,16 +49,6 @@ public class JsonUtils {
 	private static JavaType getMapType(Class<?> mapClass, Class<?> keyClass, Class<?> valueClass) {
 		return objectMapper.getTypeFactory().constructMapLikeType(mapClass, keyClass, valueClass);
 	}
-
-    public static String obj2Json2(Object object) {
-        String res = null;
-        try {
-            res = objectMapper.writeValueAsString(object);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-        return res;
-    }
     
 	/**
 	 * 对象转json字符串
@@ -67,8 +57,14 @@ public class JsonUtils {
 	 * @return
 	 * @throws IOException
 	 */
-	public static String obj2Json(Object object) throws IOException {
-		return objectMapper.writeValueAsString(object);
+	public static String obj2Json(Object object) {
+		String res = null;
+		try {
+			res = objectMapper.writeValueAsString(object);
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		}
+		return res;
 	}
 
 	/**
