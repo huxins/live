@@ -1,7 +1,8 @@
 package cn.inxiny.live.core.extractors.douyu.service;
 
 import cn.hutool.core.date.DateUtil;
-import cn.inxiny.live.core.Extractor;
+import cn.inxiny.live.core.extractors.Extractor;
+import cn.inxiny.live.core.extractors.Live;
 import cn.inxiny.live.utils.HttpUtils;
 import cn.inxiny.live.utils.JsonUtils;
 import cn.inxiny.live.utils.RedisUtil;
@@ -29,7 +30,7 @@ public class DouyuExtractor implements Extractor {
     @Autowired
     private RedisUtil redisUtil;
 
-    public List extract (String room) throws IOException, ScriptException, NoSuchMethodException {
+    public Live extract (String room) throws IOException, ScriptException, NoSuchMethodException {
         String result = "";
 
         String signjs = redisUtil.get(this.getClass().getName() + ":room=" + room + ":getSign.js");
@@ -48,7 +49,7 @@ public class DouyuExtractor implements Extractor {
 
         List list = new ArrayList();
         list.add(map);
-        return list;
+        return null;
     }
 
     public String getSign (String room, String signjs) throws FileNotFoundException, ScriptException, NoSuchMethodException {

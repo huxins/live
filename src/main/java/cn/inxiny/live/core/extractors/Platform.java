@@ -1,4 +1,4 @@
-package cn.inxiny.live.core;
+package cn.inxiny.live.core.extractors;
 
 public enum Platform {
     DOUYU,

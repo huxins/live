@@ -8,7 +8,7 @@ import java.util.Collection;
 public class ResultBean<T> {
     private int code;
     private String message;
-    private Collection<T> data;
+    private T data;
 
     private ResultBean() {
 
@@ -28,7 +28,7 @@ public class ResultBean<T> {
         return resultBean;
     }
 
-    public static <V> ResultBean<V> success(Collection<V> data) {
+    public static <V> ResultBean<V> success(V data) {
         ResultBean resultBean = new ResultBean();
         resultBean.setCode(0);
         resultBean.setMessage("success");
@@ -52,11 +52,11 @@ public class ResultBean<T> {
         this.message = message;
     }
 
-    public Collection<T> getData() {
+    public T getData() {
         return data;
     }
 
-    public void setData(Collection<T> data) {
+    public void setData(T data) {
         this.data = data;
     }
 }

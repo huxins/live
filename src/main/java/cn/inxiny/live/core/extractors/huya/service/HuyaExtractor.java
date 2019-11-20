@@ -1,15 +1,14 @@
 package cn.inxiny.live.core.extractors.huya.service;
 
-import cn.inxiny.live.core.Extractor;
+import cn.inxiny.live.core.extractors.Extractor;
 import cn.inxiny.live.core.exception.NullRoomNumberException;
+import cn.inxiny.live.core.extractors.Live;
 import cn.inxiny.live.utils.JsonUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -23,101 +22,81 @@ import java.util.regex.Pattern;
 @Service("huyaExtractor")
 public class HuyaExtractor implements Extractor {
 
-    public List extract (String room) throws IOException {
-        Map map = new HashMap();
-        Document exam = Jsoup.connect("https://www.huya.com/" + room).get();
-
-        Element j_roomTitle = exam.getElementById("J_roomTitle");
-//        if (j_roomTitle == null) {
-//            throw new NullRoomNumberException();
-//        }
-        String title = j_roomTitle.text();
-        String state = "";
-
-        String html = exam.html();
+    public Live extract (String room) throws IOException {
+        Live live = new Live();
+        String html = Jsoup.connect("https://www.huya.com/" + room).get().html();
+        if (!html.contains("roomTitle")) {
+            throw new NullRoomNumberException();
+        }
 
         // 获取状态
-        Matcher TT_ROOM_DATA = Pattern.compile("\\{\\\"type\\\"(.*)\\}").matcher(html);
-        while (TT_ROOM_DATA.find()) {
-            String group = TT_ROOM_DATA.group();
-            String s = StringUtils.substringBefore(group, "}") + "}";
-            Map<String, Object> ROOM_DATA = JsonUtils.readJson2Map(s, Map.class, String.class, Object.class);
-            state = ROOM_DATA.get("state").toString();
+        if (getState(html)){
+            //  获取流
+            live = getStream(html);
         }
 
-        if (state.equals("ON")){
+        return live;
+    }
 
-        } else {
-
+    /**
+     * 获取状态
+     * @param html
+     * @return
+     */
+    public boolean getState (String html) {
+        boolean state = false;
+        Matcher TT_ROOM_DATA = Pattern.compile("\"state\":\"(\\w{2,6})").matcher(html);
+        if (TT_ROOM_DATA.find()) {
+            if ("ON".equals(TT_ROOM_DATA.group(1))){
+                state = true;
+            }
         }
-
-        switch (state){
-            case "ON":
-                map.put("live",getStream(html));
-                state = "正在直播";
-                break;
-            case "OFF":
-                state = "未开播";
-                break;
-            case "REPLAY":
-                state = "重播";
-                break;
-        }
-
-        map.put("title",title);
-        map.put("state",state);
-
-        List list = new ArrayList();
-        list.add(map);
-
-        return list;
+        return state;
     }
 
     /**
      * 获取流
      * @param html
      */
-    public Map getStream (String html) throws IOException {
-        Map live = new HashMap();
-        Matcher m = Pattern.compile("\\{\\\"status\\\"(.*)\\}").matcher(html);
-        List<String> result = new ArrayList<String>();
-        while (m.find()) {
-            result.add(m.group());
+    public Live getStream (String html) throws IOException {
+        Live live = new Live();
+        Matcher streamMatcher = Pattern.compile("\"stream\":(.*)(\\s\\W)").matcher(html);
+        String result = "";
+        if (streamMatcher.find()) {
+            result = streamMatcher.group(1);
         }
-        String s = result.get(0);
-        s = s.substring(0,s.length()-1);
-        Map<String, Object> json = JsonUtils.readJson2Map(s, Map.class, String.class, Object.class);
-        List<Map> vMu = (List)json.get("vMultiStreamInfo");
-        List<Map> data = (List)json.get("data");
-        List<Map> jarr = (List)data.get(0).get("gameStreamInfoList");
-        for (Map jar : jarr) {
-            List listM3U8 = new ArrayList();
-            List listFLV = new ArrayList();
-            Map streamInfoM3U8 = new HashMap();
-            Map streamInfoFLV = new HashMap();
-            String sHlsUrl = jar.get("sHlsUrl").toString();
-            String sStreamName = jar.get("sStreamName").toString();
-            String sHlsUrlSuffix = jar.get("sHlsUrlSuffix").toString();
-            String sFlvUrl = jar.get("sFlvUrl").toString();
-            String sFlvUrlSuffix = jar.get("sFlvUrlSuffix").toString();
-            String sFlvAntiCode = jar.get("sFlvAntiCode").toString();
-            String iLineIndex = jar.get("iLineIndex").toString();
-            for (Map vM : vMu) {
-                if ("0".equals(vM.get("iBitRate").toString())){
-                    streamInfoM3U8.put(vM.get("sDisplayName"),sHlsUrl+"/"+sStreamName + "." + sHlsUrlSuffix);
-                    streamInfoFLV.put(vM.get("sDisplayName"), sFlvUrl+"/"+sStreamName + "." + sFlvUrlSuffix + "?" + sFlvAntiCode.replace("&amp;","&"));
-                } else {
-                    streamInfoM3U8.put(vM.get("sDisplayName"),sHlsUrl+"/"+sStreamName+ "_" + vM.get("iBitRate") + "." + sHlsUrlSuffix);
-                    streamInfoFLV.put(vM.get("sDisplayName"), sFlvUrl+"/"+sStreamName + "." + sFlvUrlSuffix + "?" + sFlvAntiCode.replace("&amp;","&") + "&ratio=" + vM.get("iBitRate"));
-                }
-            }
-            listM3U8.add(streamInfoM3U8);
-            listFLV.add(streamInfoFLV);
+        Map<String, Object> json = JsonUtils.readJson2Map(result, Map.class, String.class, Object.class);
+        List<Map> definitions = (List)json.get("vMultiStreamInfo");     // 清晰度
+        List<Map> data = (List)json.get("data");                // 线路和房间基本信息
+        List<Map> line = (List)data.get(0).get("gameStreamInfoList");   //  线路
+        Map info = (Map)data.get(0).get("gameLiveInfo");   //  基本信息
+        Map path = line.get(0);
 
-            Map protocol = new HashMap();
-            protocol.put("M3U8",streamInfoM3U8);
-            protocol.put("FLV",streamInfoFLV);
-            live.put("直播线路"+iLineIndex,protocol);
+        String sStreamName = path.get("sStreamName").toString();
+        String sHlsUrlSuffix = path.get("sHlsUrlSuffix").toString();     // m3u8
+        String sHlsUrl = path.get("sHlsUrl").toString();
+        String sFlvUrlSuffix = path.get("sFlvUrlSuffix").toString();     // flv
+        String sFlvUrl = path.get("sFlvUrl").toString();
+
+        String sFlvAntiCode = path.get("sFlvAntiCode").toString();  //  flv验证
+        String iLineIndex = path.get("iLineIndex").toString();      //  当前线路
+
+        // 获取最高清晰度
+        String m3u8 = sHlsUrl + "/" + sStreamName + "." + sHlsUrlSuffix;    // _iBitRate
+        String flv = sFlvUrl + "/" + sStreamName + "." + sFlvUrlSuffix + "?" + sFlvAntiCode.replace("&amp;", "&");  // &ratio=iBitRate
+
+        live.setLink(m3u8);
+        live.setRoomId(info.get("profileRoom").toString());
+        live.setRoomName(info.get("introduction").toString());
+        live.setRoomImg(info.get("screenshot").toString());
+        live.setOnline(true);
+
+        live.setOwnerName(info.get("nick").toString());
+        live.setOwnerAvatar(info.get("avatar180").toString());
+
+        Matcher roomInfoMatcher = Pattern.compile(">公告.*>(.*)(</s)").matcher(html);
+        if (roomInfoMatcher.find()) {
+            live.setRoomInfo(roomInfoMatcher.group(1));
         }
 
         return live;

@@ -1,20 +1,19 @@
 package cn.inxiny.live;
 
-import cn.inxiny.live.core.Extractor;
-import cn.inxiny.live.core.Platform;
+import cn.inxiny.live.core.extractors.Extractor;
+import cn.inxiny.live.core.extractors.Live;
+import cn.inxiny.live.core.extractors.Platform;
 import cn.inxiny.live.core.extractors.douyu.service.DouyuExtractor;
 import cn.inxiny.live.utils.ResultBean;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.script.ScriptException;
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 
 @RestController
+@RequestMapping(value = "/live")
 public class LiveBox {
 
     @Resource
@@ -35,18 +34,18 @@ public class LiveBox {
         return douyuExtractor.getStreamOnH5(room);
     }
 
-    @RequestMapping(value = "/live/{item}/{room}",method = RequestMethod.GET)
+    @RequestMapping(value = "/{item}/{room}",method = RequestMethod.GET)
     public ResultBean extractLive (@PathVariable("item") String item, @PathVariable("room") String room) throws IOException, ScriptException, NoSuchMethodException {
-        List extract = null;
+        Live live = null;
         Platform platform = Platform.valueOf(item.toUpperCase());
         if (platform != null) {
             switch (platform) {
                 case HUYA:
-                    extract = huyaExtractor.extract(room);
-                    return ResultBean.success(extract);
+                    live = huyaExtractor.extract(room);
+                    return ResultBean.success(live);
                 case DOUYU:
-                    extract = douyuExtractor.extract(room);
-                    return ResultBean.success(extract);
+                    live = douyuExtractor.extract(room);
+                    return ResultBean.success(live);
             }
         }
 
