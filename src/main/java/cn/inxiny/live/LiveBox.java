@@ -31,7 +31,7 @@ public class LiveBox {
     @RequestMapping(value = "/douyuLive/{room}",method = RequestMethod.GET)
     public String send (@PathVariable("room") String room) throws IOException, ScriptException, NoSuchMethodException {
         DouyuExtractor douyuExtractor = new DouyuExtractor();
-        return douyuExtractor.getStreamOnH5(room);
+        return douyuExtractor.getPre_url(room);
     }
 
     @RequestMapping(value = "/{item}/{room}",method = RequestMethod.GET)
