@@ -1,5 +1,6 @@
 package cn.inxiny.live.core.exception;
 
+import org.jsoup.HttpStatusException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -50,6 +51,12 @@ public class WebExceptionHandler {
 
     @ExceptionHandler
     public Map<String, Object> nullRoomNumberException(NullRoomNumberException e) {
+        log.error("查询房间号为空: ", e);
+        return generateErrorInfo(-1, "没有这个房间号!");
+    }
+
+    @ExceptionHandler
+    public Map<String, Object> nullRoomNumberException(HttpStatusException e) {
         log.error("查询房间号为空: ", e);
         return generateErrorInfo(-1, "没有这个房间号!");
     }

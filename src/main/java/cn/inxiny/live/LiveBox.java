@@ -5,6 +5,7 @@ import cn.inxiny.live.core.extractors.Live;
 import cn.inxiny.live.core.extractors.Platform;
 import cn.inxiny.live.core.extractors.douyu.service.DouyuExtractor;
 import cn.inxiny.live.utils.ResultBean;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
@@ -22,6 +23,9 @@ public class LiveBox {
     @Resource
     private Extractor douyuExtractor;
 
+    @Autowired
+    private DouyuExtractor douyuExtractorS;
+
     @GetMapping(value = "/huyaLive")
     public String say ( ) throws IOException {
 //        return huyaExtractor.gainHuYaJson();
@@ -30,13 +34,12 @@ public class LiveBox {
 
     @RequestMapping(value = "/douyuLive/{room}",method = RequestMethod.GET)
     public String send (@PathVariable("room") String room) throws IOException, ScriptException, NoSuchMethodException {
-        DouyuExtractor douyuExtractor = new DouyuExtractor();
-        return douyuExtractor.getPre_url(room);
+        return douyuExtractorS.getStreamOnHome(room);
     }
 
     @RequestMapping(value = "/{item}/{room}",method = RequestMethod.GET)
     public ResultBean extractLive (@PathVariable("item") String item, @PathVariable("room") String room) throws IOException, ScriptException, NoSuchMethodException {
-        Live live = null;
+        Live live;
         Platform platform = Platform.valueOf(item.toUpperCase());
         if (platform != null) {
             switch (platform) {

@@ -1,16 +1,17 @@
 package cn.inxiny.live.core.extractors.huya.service;
 
-import cn.hutool.core.date.DateTime;
-import cn.hutool.core.date.DateUtil;
+import cn.hutool.core.util.ReUtil;
+import cn.hutool.http.HttpRequest;
+import cn.hutool.json.JSONArray;
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import cn.inxiny.live.core.extractors.Extractor;
 import cn.inxiny.live.core.exception.NullRoomNumberException;
 import cn.inxiny.live.core.extractors.Live;
 import cn.inxiny.live.core.extractors.Platform;
-import cn.inxiny.live.utils.JsonUtils;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
 
@@ -24,33 +25,21 @@ public class HuyaExtractor implements Extractor {
 
     public Live extract (String room) throws IOException {
         Live live = new Live(Platform.HUYA);
-        String html = Jsoup.connect("https://www.huya.com/" + room).get().html();
-        if (!html.contains("roomTitle")) {
-            throw new NullRoomNumberException();
-        }
+        String html = HttpRequest.get("https://www.huya.com/" + room).execute().body();
 
-        // 获取状态
         if (getState(html)){
-            //  获取流
-            live = getStream(html);
+            getStream(html,live);
         }
 
         return live;
     }
 
-    /**
-     * 获取状态
-     * @param html
-     * @return
-     */
-    public boolean getState (String html) {
-        boolean state = false;
-        Matcher TT_ROOM_DATA = Pattern.compile("\"state\":\"(\\w{2,6})").matcher(html);
-        if (TT_ROOM_DATA.find()) {
-            if ("ON".equals(TT_ROOM_DATA.group(1))){
-                state = true;
-            }
+    private boolean getState (String html) {
+        if (!html.contains("roomTitle")) {
+            throw new NullRoomNumberException();
         }
+        String re = ReUtil.get("\"state\":\"(\\w{2,6})", html, 1);
+        boolean state = "ON".equals(re);
         return state;
     }
 
@@ -58,28 +47,25 @@ public class HuyaExtractor implements Extractor {
      * 获取流
      * @param html
      */
-    public Live getStream (String html) throws IOException {
-        Live live = new Live(Platform.HUYA);
-        Matcher streamMatcher = Pattern.compile("\"stream\":(.*)(\\s\\W)").matcher(html);
-        String result = "";
-        if (streamMatcher.find()) {
-            result = streamMatcher.group(1);
-        }
-        Map<String, Object> json = JsonUtils.readJson2Map(result, Map.class, String.class, Object.class);
-        List<Map> definitions = (List)json.get("vMultiStreamInfo");     // 清晰度
-        List<Map> data = (List)json.get("data");                // 线路和房间基本信息
-        List<Map> line = (List)data.get(0).get("gameStreamInfoList");   //  线路
-        Map info = (Map)data.get(0).get("gameLiveInfo");   //  基本信息
-        Map path = line.get(0);
+    public Live getStream (String html,Live live) throws IOException {
+        String result = ReUtil.get("\"stream\":(.*)(\\s\\W)",html,1);
 
-        String sStreamName = path.get("sStreamName").toString();
-        String sHlsUrlSuffix = path.get("sHlsUrlSuffix").toString();     // m3u8
-        String sHlsUrl = path.get("sHlsUrl").toString();
-        String sFlvUrlSuffix = path.get("sFlvUrlSuffix").toString();     // flv
-        String sFlvUrl = path.get("sFlvUrl").toString();
+        JSONObject parse = JSONUtil.parseObj(result);
+//        parse.getJSONArray("vMultiStreamInfo");     // 清晰度
+        String data = parse.getJSONArray("data").get(0).toString();
+        JSONObject dataInfo = JSONUtil.parseObj(data);
+        JSONArray lineList = dataInfo.getJSONArray("gameStreamInfoList");  // 线路
+        JSONObject path = lineList.getJSONObject(0);
+        JSONObject info = dataInfo.getJSONObject("gameLiveInfo");   //  基本信息
 
-        String sFlvAntiCode = path.get("sFlvAntiCode").toString();  //  flv验证
-        String iLineIndex = path.get("iLineIndex").toString();      //  当前线路
+        String sStreamName = path.getStr("sStreamName");
+        String sHlsUrlSuffix = path.getStr("sHlsUrlSuffix");     // m3u8
+        String sHlsUrl = path.getStr("sHlsUrl");
+        String sFlvUrlSuffix = path.getStr("sFlvUrlSuffix");     // flv
+        String sFlvUrl = path.getStr("sFlvUrl");
+
+        String sFlvAntiCode = path.getStr("sFlvAntiCode");  //  flv验证
+        String iLineIndex = path.getStr("iLineIndex");      //  当前线路
 
         // 获取最高清晰度
         String m3u8 = sHlsUrl + "/" + sStreamName + "." + sHlsUrlSuffix;    // _iBitRate
@@ -96,10 +82,9 @@ public class HuyaExtractor implements Extractor {
         live.setOwnerAvatar(info.get("avatar180").toString());
         live.setPrivateHost(info.get("privateHost").toString());
 
-        Matcher roomInfoMatcher = Pattern.compile(">公告.*>(.*)(</s)").matcher(html);
-        if (roomInfoMatcher.find()) {
-            live.setRoomInfo(roomInfoMatcher.group(1));
-        }
+        Pattern compile = Pattern.compile(">公告.*>([\\s\\S]*)(</s.*\\n</)");
+        String roomInfo = ReUtil.get(compile, html, 1);
+        live.setRoomInfo(roomInfo);
 
         return live;
     }

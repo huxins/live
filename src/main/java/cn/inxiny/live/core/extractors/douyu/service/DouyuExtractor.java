@@ -1,16 +1,19 @@
 package cn.inxiny.live.core.extractors.douyu.service;
 
 import cn.hutool.core.date.DateUtil;
+import cn.hutool.core.util.ReUtil;
+import cn.hutool.http.Header;
+import cn.hutool.http.HttpRequest;
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import cn.inxiny.live.core.exception.NullRoomNumberException;
 import cn.inxiny.live.core.extractors.Extractor;
 import cn.inxiny.live.core.extractors.Live;
 import cn.inxiny.live.core.extractors.Platform;
 import cn.inxiny.live.utils.HttpUtils;
-import cn.inxiny.live.utils.JsonUtils;
 import cn.inxiny.live.utils.RedisUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
@@ -23,7 +26,6 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Service("douyuExtractor")
@@ -33,38 +35,73 @@ public class DouyuExtractor implements Extractor {
     private RedisUtil redisUtil;
 
     public Live extract (String room) throws IOException, ScriptException, NoSuchMethodException {
+        //  获取直播状态与信息
+        Live live = getRoomInfo(room);
+        if (live.isOnline()){
+            String stream = getPre_url(room);
+            if (StringUtils.isEmpty(stream)){
+                String signjs = getSignJS(room);
+                String sign = getSign(room,signjs);
+                stream = getStream(room, sign);
+            }
+            if (StringUtils.isEmpty(stream)){
+                stream = getStreamOnHome(room);
+            }
+            live.setLink(stream);
+            getLink(live);
+        }
+        return live;
+    }
+
+    private Live getRoomInfo (String room) {
+        // https://open.douyucdn.cn/api/RoomApi/room/4615502 备用接口
         Live live = new Live(Platform.DOUYU);
 
-        String signjs = getSignJS(room);
-        String sign = getSign(room,signjs);
-        String stream = getStream(room, sign);
-        live.setLink(stream);
+        String info = HttpRequest.get("https://www.douyu.com/betard/" + room).execute().body();
+        if (info.contains("提示信息")){
+            throw new NullRoomNumberException();
+        }
+        JSONObject parse = JSONUtil.parseObj(info);
+        JSONObject roomInfo = parse.getJSONObject("room");
+        live.setPrivateHost(roomInfo.getStr("vipId"));
+        live.setRoomId(roomInfo.getStr("room_id"));
+        live.setRoomName(roomInfo.getStr("room_name"));
+        live.setRoomInfo(roomInfo.getStr("show_details"));
+        live.setOnline(1 == roomInfo.getInt("show_status"));
+        live.setOwnerName(roomInfo.getStr("nickname"));
+        live.setLastTime(new Date(Long.parseLong(roomInfo.getStr("show_time") + "000")));
+        live.setOwnerAvatar(roomInfo.getStr("owner_avatar"));
+        live.setRoomImg(roomInfo.getStr("room_pic"));
 
         return live;
     }
 
-    public String getSignJS (String room) throws IOException {
+    private String getSignJS (String room) throws IOException {
         String signjs = redisUtil.get(this.getClass().getName() + ":room=" + room + ":getSign.js");
         if (StringUtils.isNotEmpty(signjs)){
             return signjs;
         }
 
-        String html = HttpUtils.sendGet("https://www.douyu.com/swf_api/homeH5Enc", "rids=" + room);
-        // 获取加密 JS
-        Map<String, Object> stringObjectMap = JsonUtils.readJson2Map(html, Map.class, String.class, Object.class);
-        Map data = (Map) stringObjectMap.get("data");
-        Object o = data.get("room" + room);
-        if (o == null){
-            new NullRoomNumberException();
+        //  网页获取JS
+        String html = Jsoup.connect("https://www.douyu.com/" + room).get().html();
+        String rid = ReUtil.get("\\$ROOM\\.room_id\\s*=\\s*(\\d+)", html, 1);
+        signjs = ReUtil.get("(var vdwdae325w_64we =[\\s\\S]+?)\\s*</script>", html, 1);
+        if (StringUtils.isEmpty(signjs) || !signjs.contains("ub98484234(")){
+            //  API获取JS
+            html = HttpUtils.sendGet("https://www.douyu.com/swf_api/homeH5Enc", "rids=" + rid);
+            JSONObject parse = JSONUtil.parseObj(html);
+            signjs = parse.getJSONObject("data").getStr("room" + rid);
         }
-        signjs = o.toString();
+        if (signjs == null){
+            throw new NullRoomNumberException();
+        }
 
         redisUtil.set(this.getClass().getName()+":room="+ room + ":getSign.js", signjs);
         return signjs;
     }
 
-    public String getSign (String room, String signjs) throws FileNotFoundException, ScriptException, NoSuchMethodException {
-        Object sign = "";
+    private String getSign (String room, String signjs) throws FileNotFoundException, ScriptException, NoSuchMethodException {
+        Object sign;
 
         ScriptEngine engine = new ScriptEngineManager().getEngineByName("nashorn");
         engine.eval(new FileReader("src/main/java/cn/inxiny/live/core/expand/crypto-js.min.js"));
@@ -75,115 +112,89 @@ public class DouyuExtractor implements Extractor {
         return sign.toString();
     }
 
-    public String getStream (String room,String sign) throws IOException {
+    private String getStream (String room,String sign) {
         String stream = "";
-        String result = HttpUtils.sendPost("https://www.douyu.com/lapi/live/getH5Play/"+room, sign);
-        Map<String, Object> stringObjectMap = JsonUtils.readJson2Map(result, Map.class, String.class, Object.class);
-        if ("0".equals(stringObjectMap.get("error").toString())){
-            Map data = (Map)stringObjectMap.get("data");
-            String rtmp_live = data.get("rtmp_live").toString();
-            Matcher matcher = Pattern.compile("^[0-9a-zA-Z]*").matcher(rtmp_live);
-            if (matcher.find()) {
-                String group = matcher.group(0);
-                stream = "http://tx2play1.douyucdn.cn/live/" + group + ".flv?uuid=";
-            }
+        String body = HttpUtils.sendPost("https://www.douyu.com/lapi/live/getH5Play/"+room, sign);
+        JSONObject parse = JSONUtil.parseObj(body);
+        String error = parse.getStr("error");
+        if ("0".equals(error)){
+            JSONObject data = parse.getJSONObject("data");
+            String rtmp_live = data.getStr("rtmp_live");
+            stream = ReUtil.get("^[0-9a-zA-Z]*",rtmp_live,0);
         }
         return stream;
     }
 
-    public String getStreamOnH5 (String room) throws IOException, ScriptException, NoSuchMethodException {
+    private String getPre_url (String room) {
+        String pre_url = "";
+        String request_url = "https://playweb.douyucdn.cn/lapi/live/hlsH5Preview/" + room;
+
+        String tt = String.valueOf(new Date().getTime());
+        String md5Early = room + tt;
+        String auth = DigestUtils.md5DigestAsHex(md5Early.getBytes());
+
+        String body = HttpRequest.post(request_url)
+                .header(Header.CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .header("rid", room)
+                .header("time", tt)
+                .header("auth", auth)
+                .form("rid", room)
+                .form("did", "10000000000000000000000000001501")
+                .timeout(20000)
+                .execute().body();
+
+        JSONObject parse = JSONUtil.parseObj(body);
+        String error = parse.getStr("error");
+        if ("0".equals(error)){
+            String rtmp_live = parse.getJSONObject("data").getStr("rtmp_live");
+            if (rtmp_live.contains("mix=1")){
+                //  PKing
+            } else {
+                pre_url = ReUtil.get("^[0-9a-zA-Z]*", rtmp_live, 0);
+            }
+        }
+
+        return pre_url;
+    }
+
+    //  通过手机端获取流，备用解析
+    public String getStreamOnHome (String room) throws ScriptException, NoSuchMethodException {
         String streamOnH5 = "";
 
-        String pre_url = getPre_url(room);
-        if (StringUtils.isNotEmpty(pre_url)){
-            streamOnH5 = "http://tx2play1.douyucdn.cn/live/" + pre_url + ".flv?uuid=";
-        } else {
-            String[] strArray = getHomeJS(room);
-            String homejs = strArray[0];
-            String rid = strArray[1];
-            Date date = new Date();
-            String tt = String.valueOf(date.getTime() / 1000);
-            String post_v = DateUtil.format(date, "yyyyMMdd");
-            String homeSing = getHomeSign(rid, post_v, tt, homejs);
-            String homeSignUrl = getHomeSignUrl(rid, post_v, tt, homeSing);
-            if (!"0".equals(homeSignUrl)){
-                streamOnH5 = "http://tx2play1.douyucdn.cn/live/" + homeSignUrl + ".flv?uuid=";
-            } else {
-                // 未开播
-            }
+        String homejs = getHomeJS(room);
+        Date date = new Date();
+        String tt = String.valueOf(date.getTime() / 1000);
+        String post_v = DateUtil.format(date, "yyyyMMdd");
+        String homeSing = getHomeSign(room, post_v, tt, homejs);
+        String homeSignUrl = getHomeSignUrl(room, post_v, tt, homeSing);
+        if (StringUtils.isNotEmpty(homeSignUrl)){
+            streamOnH5 = homeSignUrl;
         }
 
         return streamOnH5;
     }
 
-    public String getPre_url (String room) throws IOException {
-        String pre_url = "";
-
-        String request_url = "https://playweb.douyucdn.cn/lapi/live/hlsH5Preview/" + room;
-        String tt = String.valueOf(new Date().getTime());
-        String md5Early = room + tt;
-        String auth = DigestUtils.md5DigestAsHex(md5Early.getBytes());
-
-        HashMap<String, String> headerMap = new HashMap<>();
-        HashMap<String, String> contentMap = new HashMap<>();
-
-        headerMap.put("content-type","application/x-www-form-urlencoded");
-        headerMap.put("rid",room);
-        headerMap.put("time",tt);
-        headerMap.put("auth",auth);
-
-        contentMap.put("rid",room);
-        contentMap.put("did","10000000000000000000000000001501");
-
-        String postResult = HttpUtils.postMap(request_url, headerMap,contentMap);
-        Map<String, Object> objectObjectMap = JsonUtils.readJson2Map(postResult,Map.class,String.class,Object.class);
-        String error = objectObjectMap.get("error").toString();
-        if ("0".equals(error)){
-            String rtmp_live = ((Map)objectObjectMap.get("data")).get("rtmp_live").toString();
-            if (rtmp_live.contains("mix=1")){
-
-            } else {
-                Matcher matcher = Pattern.compile("^[0-9a-zA-Z]*").matcher(rtmp_live);
-                if (matcher.find()) {
-                    pre_url = matcher.group(0);
-                }
-            }
+    private String getHomeJS (String room) {
+        String homejs = redisUtil.get(this.getClass().getName() + ":room=" + room + ":getHome.js");
+        if (StringUtils.isNotEmpty(homejs)){
+            return homejs;
         }
 
-        return postResult;
-//        return pre_url;
+        String html = HttpRequest.get("https://m.douyu.com/" + room).execute().body();
+//        String rid = ReUtil.get("\"rid\":(\\d{1,7})",html,1);
+
+        Pattern compile = Pattern.compile("(function ub9.*)[\\s\\S](var.*)");
+        String group1 = ReUtil.get(compile,html,1);
+        String group2 = ReUtil.get(compile,html,2);
+        group1 = group1.replaceAll("eval.*;}", "strc;}");
+        homejs = group1 + group2;
+
+        redisUtil.set(this.getClass().getName()+":room="+ room + ":getHome.js", homejs);
+        return homejs;
     }
 
-    public String[] getHomeJS (String room) throws IOException {
-        String homejs = "";
-        String rid = "";
-
-        Document exam = Jsoup.connect("https://m.douyu.com/" + room).get();
-        String html = exam.html();
-        // 获取加密 JS
-        Matcher TT_ROOM_DATA = Pattern.compile("\"rid\":(\\d{1,7})").matcher(html);
-        if (TT_ROOM_DATA.find()) {
-            rid = TT_ROOM_DATA.group(1);
-            if (!room.equals(rid)){
-                exam = Jsoup.connect("https://m.douyu.com/" + rid).get();
-                html = exam.html();
-            }
-        }
-
-        TT_ROOM_DATA = Pattern.compile("(function ub9.*)[\\s\\S](var.*)").matcher(html);
-        if (TT_ROOM_DATA.find()) {
-            String group1 = TT_ROOM_DATA.group(1);
-            String group2 = TT_ROOM_DATA.group(2);
-            group1 = group1.replaceAll("eval.*;}", "strc;}");
-            homejs = group1 + group2;
-        }
-
-        String[] strArray= {homejs,rid};
-        return strArray;
-    }
-
-    public String getHomeSign (String rid,String post_v,String tt,String homejs) throws ScriptException, NoSuchMethodException {
-        String sign = "";
+    private String getHomeSign (String rid,String post_v,String tt,String homejs) throws ScriptException, NoSuchMethodException {
+        String sign;
 
         ScriptEngine engine = new ScriptEngineManager().getEngineByName("nashorn");
         engine.eval(homejs);
@@ -202,44 +213,40 @@ public class DouyuExtractor implements Extractor {
         return sign;
     }
 
-    public String getHomeSignUrl (String rid,String post_v,String tt,String sign) throws IOException {
+    private String getHomeSignUrl (String rid,String post_v,String tt,String sign) {
         String signurl = "";
         String request_url = "https://m.douyu.com/api/room/ratestream";
 
-        HashMap<String, String> headerMap = new HashMap<>();
-        HashMap<String, String> contentMap = new HashMap<>();
-
-        headerMap.put("content-type","application/x-www-form-urlencoded");
-        headerMap.put("user-agent","Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Mobile Safari/537.36");
-
-        contentMap.put("v","2501" + post_v);
-        contentMap.put("did","10000000000000000000000000001501");
-        contentMap.put("tt",tt);
-        contentMap.put("sign",sign);
-        contentMap.put("ver","219032101");
-        contentMap.put("rid",rid);
-        contentMap.put("rate","-1");
-
-        String postResult = HttpUtils.postMap(request_url, headerMap,contentMap);
-
-        Map<String, Object> objectObjectMap = JsonUtils.readJson2Map(postResult,Map.class,String.class,Object.class);
-        String code = objectObjectMap.get("code").toString();
+        String body = HttpRequest.post(request_url)
+                .header(Header.CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .header(Header.USER_AGENT, "Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Mobile Safari/537.36")
+                .form("v", "2501" + post_v)
+                .form("did", "10000000000000000000000000001501")
+                .form("tt", tt)
+                .form("sign", sign)
+                .form("ver", "219032101")
+                .form("rid", rid)
+                .form("rate", "-1")
+                .timeout(20000)
+                .execute().body();
+        JSONObject parse = JSONUtil.parseObj(body);
+        String code = parse.getStr("code");
         if ("0".equals(code)){
-            String url = ((Map)objectObjectMap.get("data")).get("url").toString();
+            String url = parse.getJSONObject("data").getStr("url");
             if (url.contains("mix=1")){
-
+                //  PKing
             } else {
-                Matcher matcher = Pattern.compile("live/(\\d{1,8}[0-9a-zA-Z]+)_?[\\d]{0,4}/playlist").matcher(url);
-                if (matcher.find()) {
-                    signurl = matcher.group(1);
-                }
+                signurl = ReUtil.get("live/(\\d{1,8}[0-9a-zA-Z]+)_?[\\d]{0,4}/playlist", url, 1);
             }
-        } else {
-            signurl = "0";
         }
 
         return signurl;
     }
 
+    private Live getLink (Live live){
+        String link = "http://tx2play1.douyucdn.cn/live/" + live.getLink() + ".flv?uuid=";
+        live.setLink(link);
+        return live;
+    }
 
 }
