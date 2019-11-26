@@ -1,4 +1,4 @@
-package cn.inxiny.live.core.extractors.douyu.service;
+package cn.inxiny.live.core.extractors.service;
 
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.ReUtil;
@@ -18,10 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 
-import javax.script.Invocable;
-import javax.script.ScriptEngine;
-import javax.script.ScriptEngineManager;
-import javax.script.ScriptException;
+import javax.script.*;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
@@ -103,7 +100,7 @@ public class DouyuExtractor implements Extractor {
     private String getSign (String room, String signjs) throws FileNotFoundException, ScriptException, NoSuchMethodException {
         Object sign;
 
-        ScriptEngine engine = new ScriptEngineManager().getEngineByName("nashorn");
+        ScriptEngine engine = new ScriptEngineManager().getEngineByName("graal.js");
         engine.eval(new FileReader("src/main/java/cn/inxiny/live/core/expand/crypto-js.min.js"));
         engine.eval(signjs);
         engine.eval(new FileReader("src/main/java/cn/inxiny/live/core/expand/hello.js"));
@@ -158,7 +155,7 @@ public class DouyuExtractor implements Extractor {
     }
 
     //  通过手机端获取流，备用解析
-    public String getStreamOnHome (String room) throws ScriptException, NoSuchMethodException {
+    private String getStreamOnHome (String room) throws ScriptException, NoSuchMethodException {
         String streamOnH5 = "";
 
         String homejs = getHomeJS(room);
@@ -246,6 +243,15 @@ public class DouyuExtractor implements Extractor {
     private Live getLink (Live live){
         String link = "http://tx2play1.douyucdn.cn/live/" + live.getLink() + ".flv?uuid=";
         live.setLink(link);
+        return live;
+    }
+
+    public String getTestGraal (String live) {
+
+        List<ScriptEngineFactory> engines = (new ScriptEngineManager()).getEngineFactories();
+        for (ScriptEngineFactory f: engines) {
+            System.out.println(f.getLanguageName()+" "+f.getEngineName()+" "+f.getNames().toString());
+        }
         return live;
     }
 

@@ -3,7 +3,7 @@ package cn.inxiny.live;
 import cn.inxiny.live.core.extractors.Extractor;
 import cn.inxiny.live.core.extractors.Live;
 import cn.inxiny.live.core.extractors.Platform;
-import cn.inxiny.live.core.extractors.douyu.service.DouyuExtractor;
+import cn.inxiny.live.core.extractors.service.DouyuExtractor;
 import cn.inxiny.live.utils.ResultBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.*;
 import javax.annotation.Resource;
 import javax.script.ScriptException;
 import java.io.IOException;
-import java.util.List;
 
 @RestController
 @RequestMapping(value = "/live")
@@ -34,7 +33,7 @@ public class LiveBox {
 
     @RequestMapping(value = "/douyuLive/{room}",method = RequestMethod.GET)
     public String send (@PathVariable("room") String room) throws IOException, ScriptException, NoSuchMethodException {
-        return douyuExtractorS.getStreamOnHome(room);
+        return douyuExtractorS.getTestGraal(room);
     }
 
     @RequestMapping(value = "/{item}/{room}",method = RequestMethod.GET)

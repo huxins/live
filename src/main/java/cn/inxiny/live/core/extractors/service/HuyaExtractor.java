@@ -1,4 +1,4 @@
-package cn.inxiny.live.core.extractors.huya.service;
+package cn.inxiny.live.core.extractors.service;
 
 import cn.hutool.core.util.ReUtil;
 import cn.hutool.http.HttpRequest;
@@ -17,13 +17,12 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Service("huyaExtractor")
 public class HuyaExtractor implements Extractor {
 
-    public Live extract (String room) throws IOException {
+    public Live extract (String room) {
         Live live = new Live(Platform.HUYA);
         String html = HttpRequest.get("https://www.huya.com/" + room).execute().body();
 
@@ -39,15 +38,13 @@ public class HuyaExtractor implements Extractor {
             throw new NullRoomNumberException();
         }
         String re = ReUtil.get("\"state\":\"(\\w{2,6})", html, 1);
-        boolean state = "ON".equals(re);
-        return state;
+        return "ON".equals(re);
     }
 
     /**
      * 获取流
-     * @param html
      */
-    public Live getStream (String html,Live live) throws IOException {
+    private Live getStream (String html,Live live) {
         String result = ReUtil.get("\"stream\":(.*)(\\s\\W)",html,1);
 
         JSONObject parse = JSONUtil.parseObj(result);
@@ -82,7 +79,7 @@ public class HuyaExtractor implements Extractor {
         live.setOwnerAvatar(info.get("avatar180").toString());
         live.setPrivateHost(info.get("privateHost").toString());
 
-        Pattern compile = Pattern.compile(">公告.*>([\\s\\S]*)(</s.*\\n</)");
+        Pattern compile = Pattern.compile(">公告.*>([\\s\\S]*)(</s.*\\n</div)");
         String roomInfo = ReUtil.get(compile, html, 1);
         live.setRoomInfo(roomInfo);
 
@@ -94,7 +91,7 @@ public class HuyaExtractor implements Extractor {
      * @return
      */
     public String gainHuYaJson ( ) throws IOException {
-        
+
         int page = 0;//页数
         // 获取页数
         Document exam = Jsoup.connect("https://www.huya.com/l").get();
